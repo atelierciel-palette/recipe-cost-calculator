@@ -186,17 +186,37 @@
     color: var(--text-sub);
     margin-top: 4px;
   }
+  .recipe-card-wrap {
+    border-bottom: 1px solid var(--border);
+    padding: 10px 0;
+  }
+  .recipe-card-wrap:last-child { border-bottom: none; }
   .recipe-card {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 10px 0;
-    border-bottom: 1px solid var(--border);
   }
-  .recipe-card:last-child { border-bottom: none; }
   .recipe-card .name { font-weight: 600; }
   .recipe-card .cost { color: var(--accent-dark); font-weight: bold; }
   .recipe-card .actions { display: flex; gap: 6px; }
+  .recipe-steps {
+    font-size: 0.85rem;
+    color: var(--text);
+    background: #fbf1e6;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-top: 10px;
+    white-space: pre-wrap;
+  }
+  textarea#recipe-steps {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-family: inherit;
+    resize: vertical;
+  }
   .icon-btn {
     background: transparent;
     color: var(--text-sub);
@@ -266,7 +286,12 @@
     <!-- 原価計算 -->
     <div class="panel" id="panel-recipes">
       <div class="card">
-        <h2>レシピを作成</h2>
+        <h2>レシピを作成・編集</h2>
+        <div class="form-row">
+          <select id="recipe-select" onchange="onRecipeSelectChange()">
+            <option value="">― 新規登録 ―</option>
+          </select>
+        </div>
         <div class="form-row">
           <input type="text" id="recipe-name" placeholder="品名(例:食パン)">
           <input type="number" id="recipe-servings" placeholder="出来上がり個数" min="1" step="1" value="1">
@@ -274,6 +299,10 @@
 
         <div id="recipe-items"></div>
         <button onclick="addRecipeItemRow()" class="icon-btn" style="margin-bottom:12px;">+ 材料を追加</button>
+
+        <div class="form-row">
+          <textarea id="recipe-steps" placeholder="作り方・メモ(任意)" rows="4"></textarea>
+        </div>
 
         <div>
           <button onclick="saveRecipe()">レシピを保存</button>
@@ -366,6 +395,7 @@ onAuthStateChanged(auth, (user) => {
     unsubRecipes = onSnapshot(collection(db, 'recipes'), (snap) => {
       recipes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       renderRecipeList();
+      renderRecipeSelect();
     });
   } else {
     document.getElementById('login-screen').style.display = 'block';
@@ -481,6 +511,7 @@ function calcRecipeCost() {
 window.saveRecipe = async function () {
   const name = document.getElementById('recipe-name').value.trim();
   const servings = parseInt(document.getElementById('recipe-servings').value) || 1;
+  const steps = document.getElementById('recipe-steps').value.trim();
   const { total, items } = calcRecipeCost();
 
   if (!name) {
@@ -493,10 +524,10 @@ window.saveRecipe = async function () {
   }
 
   if (editingRecipeId) {
-    await updateDoc(doc(db, 'recipes', editingRecipeId), { name, servings, items });
+    await updateDoc(doc(db, 'recipes', editingRecipeId), { name, servings, items, steps });
     editingRecipeId = null;
   } else {
-    await addDoc(collection(db, 'recipes'), { name, servings, items });
+    await addDoc(collection(db, 'recipes'), { name, servings, items, steps });
   }
 
   const perUnit = total / servings;
@@ -508,21 +539,47 @@ window.saveRecipe = async function () {
 };
 
 function resetRecipeForm(clearResult = true) {
+  document.getElementById('recipe-select').value = '';
   document.getElementById('recipe-name').value = '';
   document.getElementById('recipe-servings').value = '1';
+  document.getElementById('recipe-steps').value = '';
   document.getElementById('recipe-items').innerHTML = '';
   if (clearResult) document.getElementById('recipe-result').style.display = 'none';
 }
 
-window.editRecipe = function (id) {
+function renderRecipeSelect() {
+  const sel = document.getElementById('recipe-select');
+  const current = sel.value;
+  sel.innerHTML = '<option value="">― 新規登録 ―</option>' +
+    recipes.map(r => `<option value="${r.id}">${escapeHtml(r.name)}</option>`).join('');
+  sel.value = recipes.some(r => r.id === current) ? current : '';
+}
+
+function loadRecipeIntoForm(id) {
   const recipe = recipes.find(r => r.id === id);
   if (!recipe) return;
   editingRecipeId = id;
 
+  document.getElementById('recipe-select').value = id;
   document.getElementById('recipe-name').value = recipe.name;
   document.getElementById('recipe-servings').value = recipe.servings;
+  document.getElementById('recipe-steps').value = recipe.steps || '';
   document.getElementById('recipe-items').innerHTML = '';
   recipe.items.forEach(it => window.addRecipeItemRow(it.materialId, it.quantity));
+}
+
+window.onRecipeSelectChange = function () {
+  const id = document.getElementById('recipe-select').value;
+  if (id) {
+    loadRecipeIntoForm(id);
+  } else {
+    editingRecipeId = null;
+    resetRecipeForm(true);
+  }
+};
+
+window.editRecipe = function (id) {
+  loadRecipeIntoForm(id);
 
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
@@ -533,6 +590,11 @@ window.editRecipe = function (id) {
 window.deleteRecipe = async function (id) {
   if (!confirm('このレシピを削除しますか?')) return;
   await deleteDoc(doc(db, 'recipes', id));
+};
+
+window.toggleSteps = function (id) {
+  const el = document.getElementById('steps-' + id);
+  if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
 };
 
 function renderRecipeList() {
@@ -549,20 +611,27 @@ function renderRecipeList() {
     const perUnit = total / (r.servings || 1);
 
     const div = document.createElement('div');
-    div.className = 'recipe-card';
+    div.className = 'recipe-card-wrap';
+    const stepsHtml = r.steps
+      ? `<div class="recipe-steps" id="steps-${r.id}" style="display:none;">${escapeHtml(r.steps)}</div>`
+      : '';
     div.innerHTML = `
-      <div>
-        <div class="name">${escapeHtml(r.name)}</div>
-        <div style="font-size:0.8rem;color:var(--text-sub);">${r.servings}個分</div>
+      <div class="recipe-card">
+        <div>
+          <div class="name">${escapeHtml(r.name)}</div>
+          <div style="font-size:0.8rem;color:var(--text-sub);">${r.servings}個分</div>
+        </div>
+        <div class="cost">
+          合計${total.toFixed(1)}円<br>
+          <span style="font-size:0.8rem;font-weight:normal;">(1個 ${perUnit.toFixed(1)}円)</span>
+        </div>
+        <div class="actions">
+          ${r.steps ? `<button class="icon-btn" onclick="toggleSteps('${r.id}')">作り方</button>` : ''}
+          <button class="icon-btn" onclick="editRecipe('${r.id}')">編集</button>
+          <button class="icon-btn" onclick="deleteRecipe('${r.id}')">削除</button>
+        </div>
       </div>
-      <div class="cost">
-        合計${total.toFixed(1)}円<br>
-        <span style="font-size:0.8rem;font-weight:normal;">(1個 ${perUnit.toFixed(1)}円)</span>
-      </div>
-      <div class="actions">
-        <button class="icon-btn" onclick="editRecipe('${r.id}')">編集</button>
-        <button class="icon-btn" onclick="deleteRecipe('${r.id}')">削除</button>
-      </div>
+      ${stepsHtml}
     `;
     wrap.appendChild(div);
   });
