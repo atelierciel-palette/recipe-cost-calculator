@@ -393,6 +393,28 @@ function unitPrice(material) {
   return parseFloat(material.price) / amount;
 }
 
+// 旧localStorage版からのデータ移行用(コンソールから一度だけ実行する想定)
+window.importLegacyData = async function (materialsJson, recipesJson) {
+  const legacyMaterials = JSON.parse(materialsJson || '[]');
+  const legacyRecipes = JSON.parse(recipesJson || '[]');
+  const idMap = {};
+
+  for (const m of legacyMaterials) {
+    const ref = await addDoc(collection(db, 'materials'), {
+      name: m.name, price: m.price, amount: m.amount, unit: m.unit
+    });
+    idMap[m.id] = ref.id;
+  }
+  for (const r of legacyRecipes) {
+    const items = r.items.map(it => ({
+      materialId: idMap[it.materialId] || it.materialId,
+      quantity: it.quantity
+    }));
+    await addDoc(collection(db, 'recipes'), { name: r.name, servings: r.servings, items });
+  }
+  alert(`インポート完了: 材料${legacyMaterials.length}件, レシピ${legacyRecipes.length}件`);
+};
+
 window.addMaterial = async function () {
   const name = document.getElementById('mat-name').value.trim();
   const price = document.getElementById('mat-price').value;
