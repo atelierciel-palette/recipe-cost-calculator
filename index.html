@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>パン原価計算</title>
+<title>食品原価計算</title>
 <style>
   :root {
     --bg: #fdf8f2;
@@ -33,6 +33,54 @@
     max-width: 720px;
     margin: 0 auto;
   }
+  /* ログイン画面 */
+  #login-screen {
+    max-width: 360px;
+    margin: 80px auto;
+    text-align: center;
+  }
+  #login-screen p {
+    color: var(--text-sub);
+    font-size: 0.9rem;
+    margin-bottom: 20px;
+  }
+  .google-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 20px;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 0.95rem;
+    color: var(--text);
+  }
+  .google-btn:hover { background: #f5efe7; }
+  #auth-error {
+    color: var(--danger);
+    font-size: 0.85rem;
+    margin-top: 16px;
+    display: none;
+  }
+  /* ヘッダーのユーザー情報 */
+  #user-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 720px;
+    margin: 0 auto 8px;
+    font-size: 0.8rem;
+    color: var(--text-sub);
+  }
+  #user-bar button {
+    background: transparent;
+    color: var(--text-sub);
+    border: 1px solid var(--border);
+    padding: 4px 10px;
+    font-size: 0.78rem;
+  }
+  #app-main { display: none; }
   .tabs {
     display: flex;
     gap: 8px;
@@ -160,92 +208,172 @@
 </style>
 </head>
 <body>
-<div class="container">
-  <h1>🍞 パン原価計算</h1>
 
-  <div class="tabs">
-    <button class="tab-btn active" data-tab="materials">材料管理</button>
-    <button class="tab-btn" data-tab="recipes">原価計算</button>
-    <button class="tab-btn" data-tab="list">レシピ一覧</button>
+<!-- ログイン画面 -->
+<div id="login-screen">
+  <h1>🍞 食品原価計算</h1>
+  <p>家族で共有するには、許可されたGoogleアカウントでログインしてください。</p>
+  <button class="google-btn" onclick="loginWithGoogle()">Googleでログイン</button>
+  <div id="auth-error">このアカウントには利用権限がありません。</div>
+</div>
+
+<!-- アプリ本体 -->
+<div id="app-main">
+  <div id="user-bar">
+    <span id="user-email"></span>
+    <button onclick="logout()">ログアウト</button>
   </div>
 
-  <!-- 材料管理 -->
-  <div class="panel active" id="panel-materials">
-    <div class="card">
-      <h2>材料を登録</h2>
-      <div class="hint">例:強力粉 300円で1000g購入 → 1gあたり0.3円で自動計算されます</div>
-      <div class="form-row">
-        <input type="text" id="mat-name" placeholder="材料名(例:強力粉)">
-      </div>
-      <div class="form-row">
-        <input type="number" id="mat-price" placeholder="購入価格(円)" min="0" step="1">
-        <input type="number" id="mat-amount" placeholder="購入量" min="0" step="0.01">
-        <select id="mat-unit">
-          <option value="g">g</option>
-          <option value="ml">ml</option>
-          <option value="個">個</option>
-        </select>
-      </div>
-      <button onclick="addMaterial()">材料を追加</button>
+  <div class="container">
+    <h1>🍞 食品原価計算</h1>
+
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="materials">材料管理</button>
+      <button class="tab-btn" data-tab="recipes">原価計算</button>
+      <button class="tab-btn" data-tab="list">レシピ一覧</button>
     </div>
 
-    <div class="card">
-      <h2>登録済み材料</h2>
-      <table id="material-table">
-        <thead><tr><th>材料名</th><th>単価</th><th></th></tr></thead>
-        <tbody></tbody>
-      </table>
-      <div class="empty" id="material-empty">まだ材料が登録されていません</div>
-    </div>
-  </div>
-
-  <!-- 原価計算 -->
-  <div class="panel" id="panel-recipes">
-    <div class="card">
-      <h2>レシピを作成</h2>
-      <div class="form-row">
-        <input type="text" id="recipe-name" placeholder="パン名(例:食パン)">
-        <input type="number" id="recipe-servings" placeholder="出来上がり個数" min="1" step="1" value="1">
+    <!-- 材料管理 -->
+    <div class="panel active" id="panel-materials">
+      <div class="card">
+        <h2>材料を登録</h2>
+        <div class="hint">例:強力粉 300円で1000g購入 → 1gあたり0.3円で自動計算されます</div>
+        <div class="form-row">
+          <input type="text" id="mat-name" placeholder="材料名(例:強力粉)">
+        </div>
+        <div class="form-row">
+          <input type="number" id="mat-price" placeholder="購入価格(円)" min="0" step="1">
+          <input type="number" id="mat-amount" placeholder="購入量" min="0" step="0.01">
+          <select id="mat-unit">
+            <option value="g">g</option>
+            <option value="ml">ml</option>
+            <option value="個">個</option>
+          </select>
+        </div>
+        <button onclick="addMaterial()">材料を追加</button>
       </div>
 
-      <div id="recipe-items"></div>
-      <button onclick="addRecipeItemRow()" class="icon-btn" style="margin-bottom:12px;">+ 材料を追加</button>
-
-      <div>
-        <button onclick="saveRecipe()">レシピを保存</button>
-      </div>
-
-      <div class="result-box" id="recipe-result" style="display:none;">
-        <div class="total" id="recipe-total"></div>
-        <div class="per-unit" id="recipe-per-unit"></div>
+      <div class="card">
+        <h2>登録済み材料</h2>
+        <table id="material-table">
+          <thead><tr><th>材料名</th><th>単価</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <div class="empty" id="material-empty">まだ材料が登録されていません</div>
       </div>
     </div>
-  </div>
 
-  <!-- レシピ一覧 -->
-  <div class="panel" id="panel-list">
-    <div class="card">
-      <h2>登録済みレシピ</h2>
-      <div id="recipe-list"></div>
-      <div class="empty" id="recipe-list-empty">まだレシピが登録されていません</div>
+    <!-- 原価計算 -->
+    <div class="panel" id="panel-recipes">
+      <div class="card">
+        <h2>レシピを作成</h2>
+        <div class="form-row">
+          <input type="text" id="recipe-name" placeholder="品名(例:食パン)">
+          <input type="number" id="recipe-servings" placeholder="出来上がり個数" min="1" step="1" value="1">
+        </div>
+
+        <div id="recipe-items"></div>
+        <button onclick="addRecipeItemRow()" class="icon-btn" style="margin-bottom:12px;">+ 材料を追加</button>
+
+        <div>
+          <button onclick="saveRecipe()">レシピを保存</button>
+        </div>
+
+        <div class="result-box" id="recipe-result" style="display:none;">
+          <div class="total" id="recipe-total"></div>
+          <div class="per-unit" id="recipe-per-unit"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- レシピ一覧 -->
+    <div class="panel" id="panel-list">
+      <div class="card">
+        <h2>登録済みレシピ</h2>
+        <div id="recipe-list"></div>
+        <div class="empty" id="recipe-list-empty">まだレシピが登録されていません</div>
+      </div>
     </div>
   </div>
 </div>
 
-<script>
-const STORAGE_KEY_MATERIALS = 'bread_cost_materials';
-const STORAGE_KEY_RECIPES = 'bread_cost_recipes';
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+import {
+  getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+import {
+  getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
-let materials = JSON.parse(localStorage.getItem(STORAGE_KEY_MATERIALS) || '[]');
-let recipes = JSON.parse(localStorage.getItem(STORAGE_KEY_RECIPES) || '[]');
+const firebaseConfig = {
+  apiKey: "AIzaSyBWOtfyBXBokGi8wcEV85bBMmjEFMNBOWY",
+  authDomain: "recipe-cost-calculator-a4ada.firebaseapp.com",
+  projectId: "recipe-cost-calculator-a4ada",
+  storageBucket: "recipe-cost-calculator-a4ada.firebasestorage.app",
+  messagingSenderId: "284308114252",
+  appId: "1:284308114252:web:6b11e60afffce4a8179de9"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const provider = new GoogleAuthProvider();
+
+let materials = [];
+let recipes = [];
 let editingRecipeId = null;
+let unsubMaterials = null;
+let unsubRecipes = null;
 
-function saveMaterials() {
-  localStorage.setItem(STORAGE_KEY_MATERIALS, JSON.stringify(materials));
-}
-function saveRecipes() {
-  localStorage.setItem(STORAGE_KEY_RECIPES, JSON.stringify(recipes));
-}
+window.loginWithGoogle = async function () {
+  document.getElementById('auth-error').style.display = 'none';
+  try {
+    await signInWithPopup(auth, provider);
+  } catch (e) {
+    console.error(e);
+    document.getElementById('auth-error').textContent = 'ログインに失敗しました: ' + e.message;
+    document.getElementById('auth-error').style.display = 'block';
+  }
+};
+
+window.logout = async function () {
+  await signOut(auth);
+};
+
+onAuthStateChanged(auth, (user) => {
+  if (unsubMaterials) { unsubMaterials(); unsubMaterials = null; }
+  if (unsubRecipes) { unsubRecipes(); unsubRecipes = null; }
+
+  if (user) {
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app-main').style.display = 'block';
+    document.getElementById('user-email').textContent = user.email;
+
+    unsubMaterials = onSnapshot(collection(db, 'materials'), (snap) => {
+      materials = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderMaterials();
+      renderRecipeItemSelects();
+    }, (err) => {
+      console.error(err);
+      document.getElementById('auth-error').textContent = 'データ取得に失敗しました(利用権限がない可能性があります)';
+      document.getElementById('auth-error').style.display = 'block';
+      document.getElementById('login-screen').style.display = 'block';
+      document.getElementById('app-main').style.display = 'none';
+      signOut(auth);
+    });
+
+    unsubRecipes = onSnapshot(collection(db, 'recipes'), (snap) => {
+      recipes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderRecipeList();
+    });
+  } else {
+    document.getElementById('login-screen').style.display = 'block';
+    document.getElementById('app-main').style.display = 'none';
+    materials = [];
+    recipes = [];
+  }
+});
 
 // タブ切り替え
 document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -265,7 +393,7 @@ function unitPrice(material) {
   return parseFloat(material.price) / amount;
 }
 
-function addMaterial() {
+window.addMaterial = async function () {
   const name = document.getElementById('mat-name').value.trim();
   const price = document.getElementById('mat-price').value;
   const amount = document.getElementById('mat-amount').value;
@@ -276,25 +404,19 @@ function addMaterial() {
     return;
   }
 
-  materials.push({
-    id: Date.now().toString(),
+  await addDoc(collection(db, 'materials'), {
     name, price: parseFloat(price), amount: parseFloat(amount), unit
   });
-  saveMaterials();
 
   document.getElementById('mat-name').value = '';
   document.getElementById('mat-price').value = '';
   document.getElementById('mat-amount').value = '';
+};
 
-  renderMaterials();
-}
-
-function deleteMaterial(id) {
+window.deleteMaterial = async function (id) {
   if (!confirm('この材料を削除しますか?')) return;
-  materials = materials.filter(m => m.id !== id);
-  saveMaterials();
-  renderMaterials();
-}
+  await deleteDoc(doc(db, 'materials', id));
+};
 
 function renderMaterials() {
   const tbody = document.querySelector('#material-table tbody');
@@ -322,7 +444,7 @@ function renderRecipeItemSelects() {
   });
 }
 
-function addRecipeItemRow(materialId, quantity) {
+window.addRecipeItemRow = function (materialId, quantity) {
   if (materials.length === 0) {
     alert('先に「材料管理」タブで材料を登録してください');
     return;
@@ -338,7 +460,7 @@ function addRecipeItemRow(materialId, quantity) {
   `;
   wrap.appendChild(row);
   if (materialId) row.querySelector('.ri-material').value = materialId;
-}
+};
 
 function calcRecipeCost() {
   const rows = document.querySelectorAll('#recipe-items .recipe-item-row');
@@ -356,13 +478,13 @@ function calcRecipeCost() {
   return { total, items };
 }
 
-function saveRecipe() {
+window.saveRecipe = async function () {
   const name = document.getElementById('recipe-name').value.trim();
   const servings = parseInt(document.getElementById('recipe-servings').value) || 1;
   const { total, items } = calcRecipeCost();
 
   if (!name) {
-    alert('パン名を入力してください');
+    alert('品名を入力してください');
     return;
   }
   if (items.length === 0) {
@@ -371,13 +493,11 @@ function saveRecipe() {
   }
 
   if (editingRecipeId) {
-    const idx = recipes.findIndex(r => r.id === editingRecipeId);
-    if (idx !== -1) recipes[idx] = { id: editingRecipeId, name, servings, items };
+    await updateDoc(doc(db, 'recipes', editingRecipeId), { name, servings, items });
     editingRecipeId = null;
   } else {
-    recipes.push({ id: Date.now().toString(), name, servings, items });
+    await addDoc(collection(db, 'recipes'), { name, servings, items });
   }
-  saveRecipes();
 
   const perUnit = total / servings;
   document.getElementById('recipe-result').style.display = 'block';
@@ -385,8 +505,7 @@ function saveRecipe() {
   document.getElementById('recipe-per-unit').textContent = `1個あたり: ${perUnit.toFixed(1)}円(${servings}個分)`;
 
   resetRecipeForm(false);
-  renderRecipeList();
-}
+};
 
 function resetRecipeForm(clearResult = true) {
   document.getElementById('recipe-name').value = '';
@@ -395,7 +514,7 @@ function resetRecipeForm(clearResult = true) {
   if (clearResult) document.getElementById('recipe-result').style.display = 'none';
 }
 
-function editRecipe(id) {
+window.editRecipe = function (id) {
   const recipe = recipes.find(r => r.id === id);
   if (!recipe) return;
   editingRecipeId = id;
@@ -403,20 +522,18 @@ function editRecipe(id) {
   document.getElementById('recipe-name').value = recipe.name;
   document.getElementById('recipe-servings').value = recipe.servings;
   document.getElementById('recipe-items').innerHTML = '';
-  recipe.items.forEach(it => addRecipeItemRow(it.materialId, it.quantity));
+  recipe.items.forEach(it => window.addRecipeItemRow(it.materialId, it.quantity));
 
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.querySelector('[data-tab="recipes"]').classList.add('active');
   document.getElementById('panel-recipes').classList.add('active');
-}
+};
 
-function deleteRecipe(id) {
+window.deleteRecipe = async function (id) {
   if (!confirm('このレシピを削除しますか?')) return;
-  recipes = recipes.filter(r => r.id !== id);
-  saveRecipes();
-  renderRecipeList();
-}
+  await deleteDoc(doc(db, 'recipes', id));
+};
 
 function renderRecipeList() {
   const wrap = document.getElementById('recipe-list');
@@ -456,10 +573,6 @@ function escapeHtml(str) {
   div.textContent = str;
   return div.innerHTML;
 }
-
-// 初期表示
-renderMaterials();
-renderRecipeList();
 </script>
 </body>
 </html>
