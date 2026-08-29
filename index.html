@@ -193,12 +193,39 @@
   .recipe-card-wrap:last-child { border-bottom: none; }
   .recipe-card {
     display: flex;
-    justify-content: space-between;
     align-items: center;
+    gap: 10px;
   }
+  .recipe-card .info { flex: 1; min-width: 0; }
   .recipe-card .name { font-weight: 600; }
-  .recipe-card .cost { color: var(--accent-dark); font-weight: bold; }
-  .recipe-card .actions { display: flex; gap: 6px; }
+  .recipe-card .cost { color: var(--accent-dark); font-weight: bold; text-align: right; }
+  .recipe-card .actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .recipe-thumb, .recipe-thumb-placeholder {
+    width: 48px;
+    height: 48px;
+    border-radius: 8px;
+    object-fit: cover;
+    flex-shrink: 0;
+  }
+  .recipe-thumb-placeholder {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+  }
+  .photo-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .photo-row input[type="file"] {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.82rem;
+  }
   .recipe-steps {
     font-size: 0.85rem;
     color: var(--text);
@@ -297,6 +324,13 @@
           <input type="number" id="recipe-servings" placeholder="出来上がり個数" min="1" step="1" value="1">
         </div>
 
+        <div class="photo-row">
+          <img id="recipe-photo-preview" class="recipe-thumb" style="display:none;">
+          <div class="recipe-thumb-placeholder" id="recipe-photo-placeholder">🍞</div>
+          <input type="file" id="recipe-photo-input" accept="image/*" onchange="onPhotoSelected(event)">
+          <button type="button" class="icon-btn" id="recipe-photo-remove" style="display:none;" onclick="removePhoto()">写真を削除</button>
+        </div>
+
         <div id="recipe-items"></div>
         <button onclick="addRecipeItemRow()" class="icon-btn" style="margin-bottom:12px;">+ 材料を追加</button>
 
@@ -354,6 +388,66 @@ let recipes = [];
 let editingRecipeId = null;
 let unsubMaterials = null;
 let unsubRecipes = null;
+let currentPhotoDataUrl = null;
+
+// 写真をアイコン大(100x100, JPEG)にリサイズしてdata URLに変換
+function resizeImageToDataUrl(file, size = 100, quality = 0.7) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const side = Math.min(img.width, img.height);
+        const sx = (img.width - side) / 2;
+        const sy = (img.height - side) / 2;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, sx, sy, side, side, 0, 0, size, size);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = () => reject(new Error('画像の読み込みに失敗しました'));
+      img.src = e.target.result;
+    };
+    reader.onerror = () => reject(new Error('ファイルの読み込みに失敗しました'));
+    reader.readAsDataURL(file);
+  });
+}
+
+window.onPhotoSelected = async function (event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  try {
+    currentPhotoDataUrl = await resizeImageToDataUrl(file);
+    updatePhotoPreview();
+  } catch (e) {
+    console.error(e);
+    alert('写真の読み込みに失敗しました');
+  }
+};
+
+window.removePhoto = function () {
+  currentPhotoDataUrl = null;
+  document.getElementById('recipe-photo-input').value = '';
+  updatePhotoPreview();
+};
+
+function updatePhotoPreview() {
+  const img = document.getElementById('recipe-photo-preview');
+  const placeholder = document.getElementById('recipe-photo-placeholder');
+  const removeBtn = document.getElementById('recipe-photo-remove');
+  if (currentPhotoDataUrl) {
+    img.src = currentPhotoDataUrl;
+    img.style.display = 'block';
+    placeholder.style.display = 'none';
+    removeBtn.style.display = 'inline-block';
+  } else {
+    img.style.display = 'none';
+    placeholder.style.display = 'flex';
+    removeBtn.style.display = 'none';
+  }
+}
 
 window.loginWithGoogle = async function () {
   document.getElementById('auth-error').style.display = 'none';
@@ -523,11 +617,13 @@ window.saveRecipe = async function () {
     return;
   }
 
+  const photo = currentPhotoDataUrl || null;
+
   if (editingRecipeId) {
-    await updateDoc(doc(db, 'recipes', editingRecipeId), { name, servings, items, steps });
+    await updateDoc(doc(db, 'recipes', editingRecipeId), { name, servings, items, steps, photo });
     editingRecipeId = null;
   } else {
-    await addDoc(collection(db, 'recipes'), { name, servings, items, steps });
+    await addDoc(collection(db, 'recipes'), { name, servings, items, steps, photo });
   }
 
   const perUnit = total / servings;
@@ -544,6 +640,9 @@ function resetRecipeForm(clearResult = true) {
   document.getElementById('recipe-servings').value = '1';
   document.getElementById('recipe-steps').value = '';
   document.getElementById('recipe-items').innerHTML = '';
+  currentPhotoDataUrl = null;
+  document.getElementById('recipe-photo-input').value = '';
+  updatePhotoPreview();
   if (clearResult) document.getElementById('recipe-result').style.display = 'none';
 }
 
@@ -566,6 +665,10 @@ function loadRecipeIntoForm(id) {
   document.getElementById('recipe-steps').value = recipe.steps || '';
   document.getElementById('recipe-items').innerHTML = '';
   recipe.items.forEach(it => window.addRecipeItemRow(it.materialId, it.quantity));
+
+  document.getElementById('recipe-photo-input').value = '';
+  currentPhotoDataUrl = recipe.photo || null;
+  updatePhotoPreview();
 }
 
 window.onRecipeSelectChange = function () {
@@ -615,9 +718,13 @@ function renderRecipeList() {
     const stepsHtml = r.steps
       ? `<div class="recipe-steps" id="steps-${r.id}" style="display:none;">${escapeHtml(r.steps)}</div>`
       : '';
+    const thumbHtml = r.photo
+      ? `<img class="recipe-thumb" src="${r.photo}">`
+      : `<div class="recipe-thumb-placeholder">🍞</div>`;
     div.innerHTML = `
       <div class="recipe-card">
-        <div>
+        ${thumbHtml}
+        <div class="info">
           <div class="name">${escapeHtml(r.name)}</div>
           <div style="font-size:0.8rem;color:var(--text-sub);">${r.servings}個分</div>
         </div>
